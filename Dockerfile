@@ -23,7 +23,7 @@ RUN echo "<source>\n\
   azure_container                   fluentd\n\
   auto_create_container             true\n\
   path                              logs/\n\
-  azure_msi_client_id               F533561D-51E3-4F73-BE9F-8DD915ACDD06\n
+  azure_msi_client_id               F533561D-51E3-4F73-BE9F-8DD915ACDD06\n\
   azure_object_key_format           %{path}%{time_slice}_%{index}.log\n\
   time_slice_format                 %Y%m%d-%H\n\
   <buffer tag,time>\n\
