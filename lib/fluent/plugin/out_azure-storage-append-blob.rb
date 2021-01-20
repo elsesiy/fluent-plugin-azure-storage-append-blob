@@ -24,6 +24,7 @@ module Fluent
       config_param :azure_storage_access_key, :string, default: nil, secret: true
       config_param :azure_storage_sas_token, :string, default: nil, secret: true
       config_param :azure_storage_connection_string, :string, default: nil, secret: true
+      config_param :azure_msi_client_id, :string, default: nil
       config_param :azure_container, :string, default: nil
       config_param :azure_imds_api_version, :string, default: '2019-08-15'
       config_param :azure_token_refresh_interval, :integer, default: 60
@@ -79,11 +80,15 @@ module Fluent
       def get_access_token
         access_key_request = Faraday.new('http://169.254.169.254/metadata/identity/oauth2/token?' \
                                          "api-version=#{@azure_imds_api_version}" \
-                                         '&resource=https://storage.azure.com/',
-                                         headers: { 'Metadata' => 'true' })
-                                    .get
-                                    .body
-        JSON.parse(access_key_request)['access_token']
+                                         '&resource=https://storage.azure.com/' \
+                                         "#{! azure_msi_client_id.nil? ? "&client_id=#{azure_msi_client_id}" : ''}",
+                                         headers: { 'Metadata' => 'true' }).get
+
+        if access_key_request.status == 200
+          JSON.parse(access_key_request.body)['access_token']
+        else
+          raise "Access token request was not sucssessful. Possibly due to missing azure_msi_client_id config parameter."
+        end
       end
 
       def start

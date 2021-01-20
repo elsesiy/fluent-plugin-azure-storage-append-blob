@@ -31,6 +31,7 @@ And then execute:
       azure_imds_api_version            <Azure Instance Metadata Service API Version> # only used for MSI
       azure_token_refresh_interval      <refresh interval in min> # only used for MSI
       azure_container                   <your azure storage container>
+      azure_msi_client_id               <Azure Managed Identity Client ID> # only used for MSI
       auto_create_container             true
       path                              logs/
       azure_object_key_format           %{path}%{time_slice}_%{index}.log
@@ -74,6 +75,10 @@ When using MSI, the initial access token needs to be refreshed periodically.
 ### `azure_container` (Required)
 
 Azure Storage Container name
+
+### `azure_msi_client_id` (Optional, only for MSI)
+
+Azure Identity Client ID to use for accessing Azure Blob service.
 
 ### `auto_create_container`
 
