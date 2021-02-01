@@ -11,6 +11,7 @@ class AzureStorageAppendBlobOutTest < Test::Unit::TestCase
   end
 
   CONFIG = %(
+    azure_cloud AZUREGERMANCLOUD
     azure_storage_account test_storage_account
     azure_storage_access_key MY_FAKE_SECRET
     azure_container test_container
@@ -55,6 +56,7 @@ class AzureStorageAppendBlobOutTest < Test::Unit::TestCase
 
     test 'config with access key should set instance variables' do
       d = create_driver
+      assert_equal 'core.cloudapi.de', d.instance.instance_variable_get(:@azure_storage_dns_suffix)
       assert_equal 'test_storage_account', d.instance.azure_storage_account
       assert_equal 'MY_FAKE_SECRET', d.instance.azure_storage_access_key
       assert_equal 'test_container', d.instance.azure_container
@@ -66,7 +68,7 @@ class AzureStorageAppendBlobOutTest < Test::Unit::TestCase
       d = create_driver conf: MSI_CONFIG
       assert_equal 'test_storage_account', d.instance.azure_storage_account
       assert_equal 'test_container', d.instance.azure_container
-      assert_equal true, d.instance.use_msi
+      assert_equal true, d.instance.instance_variable_get(:@use_msi)
       assert_equal true, d.instance.auto_create_container
       assert_equal '%{path}%{time_slice}-%{index}.log', d.instance.azure_object_key_format
       assert_equal 120, d.instance.azure_token_refresh_interval
@@ -76,7 +78,7 @@ class AzureStorageAppendBlobOutTest < Test::Unit::TestCase
     test 'config with connection string should set instance variables' do
       d = create_driver conf: CONNSTR_CONFIG
       assert_equal 'https://test', d.instance.azure_storage_connection_string
-      assert_equal false, d.instance.use_msi
+      assert_equal false, d.instance.instance_variable_get(:@use_msi)
       assert_equal true, d.instance.auto_create_container
     end
   end
@@ -122,11 +124,11 @@ class AzureStorageAppendBlobOutTest < Test::Unit::TestCase
     end
     attr_reader :blocks
 
-    def append_blob_block(container, path, data)
+    def append_blob_block(_container, _path, data)
       @blocks.append(data)
     end
 
-    def get_container_properties(container)
+    def get_container_properties(_container)
       unless @response.status_code == 200
         raise Azure::Core::Http::HTTPError.new(@response)
       end

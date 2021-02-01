@@ -11,7 +11,7 @@ require 'json'
 
 module Fluent
   module Plugin
-    class AzureStorageAppendBlobOut < Fluent::Plugin::Output
+    class AzureStorageAppendBlobOut < Output
       Fluent::Plugin.register_output('azure-storage-append-blob', self)
 
       helpers :formatter, :inject
@@ -19,16 +19,29 @@ module Fluent
       DEFAULT_FORMAT_TYPE = 'out_file'.freeze
       AZURE_BLOCK_SIZE_LIMIT = 4 * 1024 * 1024 - 1
 
+      def initialize
+        super
+        @use_msi = false
+
+        # Storage endpoint suffixes for various environments, see https://github.com/Azure/go-autorest/blob/master/autorest/azure/environments.go
+        @storage_endpoint_mapping = {
+          'AZURECHINACLOUD' => 'core.chinacloudapi.cn',
+          'AZUREGERMANCLOUD' => 'core.cloudapi.de',
+          'AZUREPUBLICCLOUD' => 'core.windows.net',
+          'AZUREUSGOVERNMENTCLOUD' => 'core.usgovcloudapi.net'
+        }
+      end
+
       config_param :path, :string, default: ''
       config_param :azure_storage_account, :string, default: nil
       config_param :azure_storage_access_key, :string, default: nil, secret: true
-      config_param :azure_storage_sas_token, :string, default: nil, secret: true
       config_param :azure_storage_connection_string, :string, default: nil, secret: true
+      config_param :azure_storage_sas_token, :string, default: nil, secret: true
+      config_param :azure_cloud, :string, default: 'AZUREPUBLICCLOUD'
       config_param :azure_msi_client_id, :string, default: nil
       config_param :azure_container, :string, default: nil
       config_param :azure_imds_api_version, :string, default: '2019-08-15'
       config_param :azure_token_refresh_interval, :integer, default: 60
-      config_param :use_msi, :bool, default: false
       config_param :azure_object_key_format, :string, default: '%{path}%{time_slice}-%{index}.log'
       config_param :auto_create_container, :bool, default: true
       config_param :format, :string, default: DEFAULT_FORMAT_TYPE
@@ -61,6 +74,11 @@ module Fluent
                          end
                        end
 
+        @azure_storage_dns_suffix = @storage_endpoint_mapping[@azure_cloud]
+        if @azure_storage_dns_suffix.nil?
+          raise ConfigError 'azure_cloud invalid, must be either of AZURECHINACLOUD, AZUREGERMANCLOUD, AZUREPUBLICCLOUD, AZUREUSGOVERNMENTCLOUD'
+        end
+
         if (@azure_storage_access_key.nil? || @azure_storage_access_key.empty?) &&
            (@azure_storage_sas_token.nil? || @azure_storage_sas_token.empty?) &&
            (@azure_storage_connection_string.nil? || @azure_storage_connection_string.empty?)
@@ -80,13 +98,13 @@ module Fluent
         access_key_request = Faraday.new('http://169.254.169.254/metadata/identity/oauth2/token?' \
                                          "api-version=#{@azure_imds_api_version}" \
                                          '&resource=https://storage.azure.com/' \
-                                         "#{! azure_msi_client_id.nil? ? "&client_id=#{azure_msi_client_id}" : ''}",
+                                         "#{!azure_msi_client_id.nil? ? "&client_id=#{azure_msi_client_id}" : ''}",
                                          headers: { 'Metadata' => 'true' }).get
 
         if access_key_request.status == 200
           JSON.parse(access_key_request.body)['access_token']
         else
-          raise "Access token request was not sucssessful. Possibly due to missing azure_msi_client_id config parameter."
+          raise 'Access token request was not sucssessful. Possibly due to missing azure_msi_client_id config parameter.'
         end
       end
 
@@ -95,7 +113,11 @@ module Fluent
         if @use_msi
           token_credential = Azure::Storage::Common::Core::TokenCredential.new get_access_token
           token_signer = Azure::Storage::Common::Core::Auth::TokenSigner.new token_credential
-          @bs = Azure::Storage::Blob::BlobService.new(storage_account_name: @azure_storage_account, signer: token_signer)
+          @bs = Azure::Storage::Blob::BlobService.new(
+            storage_account_name: @azure_storage_account,
+            storage_dns_suffix: @azure_storage_dns_suffix,
+            signer: token_signer
+          )
 
           refresh_interval = @azure_token_refresh_interval * 60
           cancelled = false
@@ -112,7 +134,7 @@ module Fluent
         elsif !@azure_storage_connection_string.nil? && !@azure_storage_connection_string.empty?
           @bs = Azure::Storage::Blob::BlobService.create_from_connection_string(@azure_storage_connection_string)
         else
-          @bs_params = { storage_account_name: @azure_storage_account }
+          @bs_params = { storage_account_name: @azure_storage_account, storage_dns_suffix: @azure_storage_dns_suffix }
 
           if !@azure_storage_access_key.nil? && !@azure_storage_access_key.empty?
             @bs_params.merge!({ storage_access_key: @azure_storage_access_key })
@@ -152,7 +174,11 @@ module Fluent
           append_blob(content, metadata)
           @last_azure_storage_path = @azure_storage_path
         ensure
-          tmp.close(true) rescue nil
+          begin
+            tmp.close(true)
+          rescue StandardError
+            nil
+          end
         end
       end
 
@@ -202,34 +228,32 @@ module Fluent
         position = 0
         log.debug "azure_storage_append_blob: append_blob.start: Content size: #{content.length}"
         loop do
-          begin
-            size = [content.length - position, AZURE_BLOCK_SIZE_LIMIT].min
-            log.debug "azure_storage_append_blob: append_blob.chunk: content[#{position}..#{position + size}]"
-            @bs.append_blob_block(@azure_container, @azure_storage_path, content[position..position + size - 1])
-            position += size
-            break if position >= content.length
-          rescue Azure::Core::Http::HTTPError => e
-            status_code = e.status_code
+          size = [content.length - position, AZURE_BLOCK_SIZE_LIMIT].min
+          log.debug "azure_storage_append_blob: append_blob.chunk: content[#{position}..#{position + size}]"
+          @bs.append_blob_block(@azure_container, @azure_storage_path, content[position..position + size - 1])
+          position += size
+          break if position >= content.length
+        rescue Azure::Core::Http::HTTPError => e
+          status_code = e.status_code
 
-            if status_code == 409 # exceeds azure block limit
-              @current_index += 1
-              old_azure_storage_path = @azure_storage_path
-              generate_log_name(metadata, @current_index)
+          if status_code == 409 # exceeds azure block limit
+            @current_index += 1
+            old_azure_storage_path = @azure_storage_path
+            generate_log_name(metadata, @current_index)
 
-              # If index is not a part of format, rethrow exception.
-              if old_azure_storage_path == @azure_storage_path
-                log.warn 'azure_storage_append_blob: append_blob: blocks limit reached, you need to use %{index} for the format.'
-                raise
-              end
-
-              log.debug "azure_storage_append_blob: append_blob: blocks limit reached, creating new blob #{@azure_storage_path}."
-              @bs.create_append_blob(@azure_container, @azure_storage_path)
-            elsif status_code == 404 # blob not found
-              log.debug "azure_storage_append_blob: append_blob: #{@azure_storage_path} blob doesn't exist, creating new blob."
-              @bs.create_append_blob(@azure_container, @azure_storage_path)
-            else
+            # If index is not a part of format, rethrow exception.
+            if old_azure_storage_path == @azure_storage_path
+              log.warn 'azure_storage_append_blob: append_blob: blocks limit reached, you need to use %{index} for the format.'
               raise
             end
+
+            log.debug "azure_storage_append_blob: append_blob: blocks limit reached, creating new blob #{@azure_storage_path}."
+            @bs.create_append_blob(@azure_container, @azure_storage_path)
+          elsif status_code == 404 # blob not found
+            log.debug "azure_storage_append_blob: append_blob: #{@azure_storage_path} blob doesn't exist, creating new blob."
+            @bs.create_append_blob(@azure_container, @azure_storage_path)
+          else
+            raise
           end
         end
         log.debug 'azure_storage_append_blob: append_blob.complete'

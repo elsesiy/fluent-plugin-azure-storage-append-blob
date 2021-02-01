@@ -1,8 +1,8 @@
-FROM ruby:latest
+FROM ruby:2.7
 
 WORKDIR /plugin
 
-ADD . /plugin
+COPY . /plugin
 
 RUN gem install bundler && \
     gem install fluentd --no-doc && \

@@ -24,6 +24,7 @@ And then execute:
     <match pattern>
       type azure-storage-append-blob
 
+      azure_cloud                       <azure cloud environment>
       azure_storage_account             <your azure storage account>
       azure_storage_access_key          <your azure storage access key> # leave empty to use MSI
       azure_storage_connection_string   <your azure storage connection string> # leave empty to use MSI
@@ -46,6 +47,12 @@ And then execute:
         timekey_use_utc true # use utc
       </buffer>
     </match>
+
+### `azure_cloud` (Optional)
+
+Default: `AZUREPUBLICCLOUD`
+
+Cloud environment used to determine the storage endpoint suffix to use, see [here](https://github.com/Azure/go-autorest/blob/master/autorest/azure/environments.go).
 
 ### `azure_storage_account` (Required)
 
@@ -82,8 +89,9 @@ Azure Identity Client ID to use for accessing Azure Blob service.
 
 ### `auto_create_container`
 
+Default: `true`
+
 This plugin creates the Azure container if it does not already exist exist when you set 'auto_create_container' to true.
-The default value is `true`
 
 ### `azure_object_key_format`
 
