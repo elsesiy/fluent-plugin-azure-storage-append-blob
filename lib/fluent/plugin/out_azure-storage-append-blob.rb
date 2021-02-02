@@ -44,6 +44,7 @@ module Fluent
       config_param :azure_token_refresh_interval, :integer, default: 60
       config_param :azure_object_key_format, :string, default: '%{path}%{time_slice}-%{index}.log'
       config_param :auto_create_container, :bool, default: true
+      config_param :calculate_checksums, :bool, default: true
       config_param :format, :string, default: DEFAULT_FORMAT_TYPE
       config_param :time_slice_format, :string, default: '%Y%m%d'
       config_param :localtime, :bool, default: false
@@ -87,6 +88,12 @@ module Fluent
         elsif @azure_storage_connection_string.nil? || @azure_storage_connection_string.empty?
           raise ConfigError, 'azure_storage_account needs to be specified' if @azure_storage_account.nil?
           raise ConfigError, 'azure_container needs to be specified' if @azure_container.nil?
+        end
+
+        @blob_options = {}
+
+        if ! @calculate_checksums
+          @blob_options[:content_md5] = ''
         end
       end
 
@@ -230,7 +237,7 @@ module Fluent
         loop do
           size = [content.length - position, AZURE_BLOCK_SIZE_LIMIT].min
           log.debug "azure_storage_append_blob: append_blob.chunk: content[#{position}..#{position + size}]"
-          @bs.append_blob_block(@azure_container, @azure_storage_path, content[position..position + size - 1])
+          @bs.append_blob_block(@azure_container, @azure_storage_path, content[position..position + size - 1], options = @blob_options)
           position += size
           break if position >= content.length
         rescue Azure::Core::Http::HTTPError => e
