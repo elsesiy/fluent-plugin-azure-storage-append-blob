@@ -124,7 +124,7 @@ class AzureStorageAppendBlobOutTest < Test::Unit::TestCase
     end
     attr_reader :blocks
 
-    def append_blob_block(_container, _path, data)
+    def append_blob_block(_container, _path, data, options={})
       @blocks.append(data)
     end
 
