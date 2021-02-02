@@ -140,7 +140,9 @@ Format of the time used in the file name. Default is '%Y%m%d'. Use '%Y%m%d%H' to
 
 Whether to calculate MD5 checksum and provide it in a header for the blob service.
 
-Pro tip: Turn off checksum calculation for FIPS enabled environment.
+You want to set it to `false` in FIPS enabled environments.
+
+Default: true
 
 ### Run tests
 
