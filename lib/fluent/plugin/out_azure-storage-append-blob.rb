@@ -44,7 +44,7 @@ module Fluent
       config_param :azure_token_refresh_interval, :integer, default: 60
       config_param :azure_object_key_format, :string, default: '%{path}%{time_slice}-%{index}.log'
       config_param :auto_create_container, :bool, default: true
-      config_param :calculate_checksums, :bool, default: true
+      config_param :compute_checksums, :bool, default: true
       config_param :format, :string, default: DEFAULT_FORMAT_TYPE
       config_param :time_slice_format, :string, default: '%Y%m%d'
       config_param :localtime, :bool, default: false
@@ -92,7 +92,7 @@ module Fluent
 
         @blob_options = {}
 
-        if !@calculate_checksums
+        if !@compute_checksums
           @blob_options[:content_md5] = ''
         end
       end

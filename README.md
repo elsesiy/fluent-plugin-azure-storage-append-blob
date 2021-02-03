@@ -37,7 +37,7 @@ And then execute:
       path                              logs/
       azure_object_key_format           %{path}%{time_slice}_%{index}.log
       time_slice_format                 %Y%m%d-%H
-      calculate_checksums               true
+      compute_checksums                 true
       # if you want to use %{tag} or %Y/%m/%d/ like syntax in path / azure_blob_name_format,
       # need to specify tag for %{tag} and time for %Y/%m/%d in <buffer> argument.
       <buffer tag,time>
@@ -136,11 +136,11 @@ The [fluent-mixin-config-placeholders](https://github.com/tagomoris/fluent-mixin
 
 Format of the time used in the file name. Default is '%Y%m%d'. Use '%Y%m%d%H' to split files hourly.
 
-### `calculate_checksums`
+### `compute_checksums`
 
 Default: `true`
 
-Whether to calculate MD5 checksum of the blob contents during append operation and provide it in a header for the blob service.
+Whether to compute MD5 checksum of the blob contents during append operation and provide it in a header for the blob service.
 
 You want to set it to `false` in FIPS-enabled environments.
 

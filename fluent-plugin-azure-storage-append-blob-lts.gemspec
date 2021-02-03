@@ -3,7 +3,7 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 
 Gem::Specification.new do |spec|
   spec.name = 'fluent-plugin-azure-storage-append-blob-lts'
-  spec.version = '0.6.0'
+  spec.version = '0.6.1'
   spec.authors = ['Jonas-Taha El Sesiy']
   spec.email = ['github@elsesiy.com']
 
