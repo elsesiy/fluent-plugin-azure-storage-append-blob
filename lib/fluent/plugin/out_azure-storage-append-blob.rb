@@ -165,20 +165,19 @@ module Fluent
       end
 
       def write(chunk)
-        metadata = chunk.metadata
         tmp = Tempfile.new('azure-')
         begin
           chunk.write_to(tmp)
 
-          generate_log_name(metadata, @current_index)
+          generate_log_name(chunk, @current_index)
           if @last_azure_storage_path != @azure_storage_path
             @current_index = 0
-            generate_log_name(metadata, @current_index)
+            generate_log_name(chunk, @current_index)
           end
 
           content = File.open(tmp.path, 'rb', &:read)
 
-          append_blob(content, metadata)
+          append_blob(content, chunk)
           @last_azure_storage_path = @azure_storage_path
         ensure
           begin
@@ -214,7 +213,8 @@ module Fluent
         end
       end
 
-      def generate_log_name(metadata, index)
+      def generate_log_name(chunk, index)
+        metadata = chunk.metadata
         time_slice = if metadata.timekey.nil?
                        ''.freeze
                      else
@@ -228,10 +228,10 @@ module Fluent
           '%{index}' => index
         }
         storage_path = @azure_object_key_format.gsub(/%{[^}]+}/, values_for_object_key)
-        @azure_storage_path = extract_placeholders(storage_path, metadata)
+        @azure_storage_path = extract_placeholders(storage_path, chunk)
       end
 
-      def append_blob(content, metadata)
+      def append_blob(content, chunk)
         position = 0
         log.debug "azure_storage_append_blob: append_blob.start: Content size: #{content.length}"
         loop do
@@ -246,7 +246,7 @@ module Fluent
           if status_code == 409 # exceeds azure block limit
             @current_index += 1
             old_azure_storage_path = @azure_storage_path
-            generate_log_name(metadata, @current_index)
+            generate_log_name(chunk, @current_index)
 
             # If index is not a part of format, rethrow exception.
             if old_azure_storage_path == @azure_storage_path
